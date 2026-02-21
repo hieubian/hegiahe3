@@ -412,14 +412,19 @@ export default function ImageModal({
               )}
             </div>
 
-            {/* ═══ NAVIGATION ARROWS — desktop only ═══ */}
+            {/* ═══ NAVIGATION ARROWS ═══ */}
+            {/* Mobile: smaller, lower position for thumb reach */}
+            {/* Desktop: larger, vertically centered — yeezy.com style */}
             {hasPrev && (
               <button
                 onClick={goPrev}
-                className="hidden sm:flex absolute top-1/2 -translate-y-1/2 left-4 sm:left-6 z-10 w-14 h-14 items-center justify-center text-black/50 hover:text-black transition-colors duration-200"
+                className="absolute z-10 flex items-center justify-center active:opacity-40 transition-opacity duration-150
+                  top-[60%] -translate-y-1/2 left-1 w-11 h-11
+                  sm:top-1/2 sm:left-6 sm:w-14 sm:h-14
+                  text-black/30 sm:text-black/50 sm:hover:text-black"
                 aria-label="Previous"
               >
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg className="w-[18px] h-[18px] sm:w-7 sm:h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M15 18l-6-6 6-6" />
                 </svg>
               </button>
@@ -428,10 +433,13 @@ export default function ImageModal({
             {hasNext && (
               <button
                 onClick={goNext}
-                className="hidden sm:flex absolute top-1/2 -translate-y-1/2 right-4 sm:right-6 z-10 w-14 h-14 items-center justify-center text-black/50 hover:text-black transition-colors duration-200"
+                className="absolute z-10 flex items-center justify-center active:opacity-40 transition-opacity duration-150
+                  top-[60%] -translate-y-1/2 right-1 w-11 h-11
+                  sm:top-1/2 sm:right-6 sm:w-14 sm:h-14
+                  text-black/30 sm:text-black/50 sm:hover:text-black"
                 aria-label="Next"
               >
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg className="w-[18px] h-[18px] sm:w-7 sm:h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M9 18l6-6-6-6" />
                 </svg>
               </button>

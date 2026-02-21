@@ -451,24 +451,24 @@ export default function ImageModal({
               </button>
             )}
 
-            {/* ═══ MOBILE NAV BUTTONS — bottom-left / bottom-right thumb zone ═══ */}
+            {/* ═══ MOBILE NAV BUTTONS — same minimal style as close (X) button ═══ */}
             {images.length > 1 && (
               <>
                 <button
                   onClick={goPrev}
                   disabled={!hasPrev}
                   className="sm:hidden absolute z-20 flex items-center justify-center
-                    w-14 h-14 rounded-full
-                    bg-white/70 backdrop-blur-md border border-black/[0.07] shadow-md
-                    disabled:opacity-15 transition-all duration-200 ease-out
-                    active:scale-90 active:bg-black/8"
+                    text-black/80 disabled:opacity-15 transition-opacity duration-150
+                    active:opacity-40"
                   style={{
+                    minWidth: 44,
+                    minHeight: 44,
                     bottom: 'max(28px, calc(env(safe-area-inset-bottom, 0px) + 20px))',
-                    left: '24px',
+                    left: '16px',
                   }}
                   aria-label="Previous"
                 >
-                  <svg className="w-5 h-5 text-black/65" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M15 18l-6-6 6-6" />
                   </svg>
                 </button>
@@ -477,17 +477,17 @@ export default function ImageModal({
                   onClick={goNext}
                   disabled={!hasNext}
                   className="sm:hidden absolute z-20 flex items-center justify-center
-                    w-14 h-14 rounded-full
-                    bg-white/70 backdrop-blur-md border border-black/[0.07] shadow-md
-                    disabled:opacity-15 transition-all duration-200 ease-out
-                    active:scale-90 active:bg-black/8"
+                    text-black/80 disabled:opacity-15 transition-opacity duration-150
+                    active:opacity-40"
                   style={{
+                    minWidth: 44,
+                    minHeight: 44,
                     bottom: 'max(28px, calc(env(safe-area-inset-bottom, 0px) + 20px))',
-                    right: '24px',
+                    right: '16px',
                   }}
                   aria-label="Next"
                 >
-                  <svg className="w-5 h-5 text-black/65" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M9 18l6-6-6-6" />
                   </svg>
                 </button>

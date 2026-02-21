@@ -38,7 +38,7 @@ export default function Navbar() {
       `}
     >
       <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 h-12 sm:h-14 flex items-center justify-center">
-        <Link href="/" onClick={handleLogoClick} className="flex items-center gap-1.5 cursor-pointer">
+        <Link href="/" onClick={handleLogoClick} className="flex items-center cursor-pointer">
           <Image
             src="/logohegia.png"
             alt="hegiahe"
@@ -50,9 +50,6 @@ export default function Navbar() {
             draggable={false}
             style={{ imageRendering: 'auto' }}
           />
-          <span className="text-[10px] sm:text-[11px] tracking-[0.4em] text-black font-medium select-none uppercase leading-none pl-0.5">
-            hegiahe
-          </span>
         </Link>
       </div>
     </nav>

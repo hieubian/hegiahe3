@@ -195,21 +195,22 @@ export default function ImageModal({
       const dx = t.clientX - touch.x
       const dy = t.clientY - touch.y
 
-      // Lock direction — on mobile, only vertical swipe (no horizontal nav)
+      // Lock direction — on mobile, ignore all swipe gestures (no nav, no dismiss)
       if (touch.dir === 'none' && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
         if (isMobileRef.current) {
-          touch.dir = 'v'
+          touch.dir = 'none' // stay locked, do nothing
+          return
         } else {
           touch.dir = Math.abs(dy) >= Math.abs(dx) ? 'v' : 'h'
         }
       }
 
-      // CRITICAL: prevent browser scroll/pull-to-refresh
-      if (touch.dir !== 'none') {
+      // CRITICAL: prevent browser scroll/pull-to-refresh (desktop only)
+      if (!isMobileRef.current && touch.dir !== 'none') {
         e.preventDefault()
       }
 
-      if (touch.dir === 'v') {
+      if (touch.dir === 'v' && !isMobileRef.current) {
         dragY.set(dy)
       }
 
@@ -228,7 +229,7 @@ export default function ImageModal({
       const dir = touch.dir
       touch = null
 
-      if (dir === 'v') {
+      if (dir === 'v' && !isMobileRef.current) {
         const vy = Math.abs(dy / dt) * 1000
         if (Math.abs(dy) > 70 || vy > 500) {
           // Dismiss
@@ -353,7 +354,7 @@ export default function ImageModal({
             ref={overlayRef}
             key="modal-overlay"
             className="fixed inset-0 z-50"
-            style={{ touchAction: 'none' }}
+            style={{ touchAction: isMobile ? 'auto' : 'none' }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -363,7 +364,7 @@ export default function ImageModal({
             <motion.div
               className="absolute inset-0 bg-white"
               style={{ opacity: backdropOpacity }}
-              onClick={onClose}
+              onClick={isMobile ? undefined : onClose}
             />
 
             {/* ═══ TOP BAR ═══ */}

@@ -88,7 +88,7 @@ export default async function handler(
         const imageData = {
           slug,
           title,
-          description: description || undefined,
+          description: description ?? undefined,
           image_url: `/uploads/${filename}`,
           thumbnail_url: `/uploads/${thumbFilename}`,
           width: metadata.width || 0,

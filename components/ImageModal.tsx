@@ -65,8 +65,13 @@ export default function ImageModal({
 
   // ── Detect mobile ──
   const [isMobile, setIsMobile] = useState(false)
+  const isMobileRef = useRef(false)
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 640)
+    const check = () => {
+      const m = window.innerWidth < 640
+      setIsMobile(m)
+      isMobileRef.current = m
+    }
     check()
     window.addEventListener('resize', check, { passive: true })
     return () => window.removeEventListener('resize', check)
@@ -190,9 +195,13 @@ export default function ImageModal({
       const dx = t.clientX - touch.x
       const dy = t.clientY - touch.y
 
-      // Lock direction
+      // Lock direction — on mobile, only vertical swipe (no horizontal nav)
       if (touch.dir === 'none' && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
-        touch.dir = Math.abs(dy) >= Math.abs(dx) ? 'v' : 'h'
+        if (isMobileRef.current) {
+          touch.dir = 'v'
+        } else {
+          touch.dir = Math.abs(dy) >= Math.abs(dx) ? 'v' : 'h'
+        }
       }
 
       // CRITICAL: prevent browser scroll/pull-to-refresh
@@ -204,7 +213,7 @@ export default function ImageModal({
         dragY.set(dy)
       }
 
-      if (touch.dir === 'h') {
+      if (touch.dir === 'h' && !isMobileRef.current) {
         const atEdge = (!hasPrevRef.current && dx > 0) || (!hasNextRef.current && dx < 0)
         dragX.set(dx * (atEdge ? 0.2 : 0.85))
       }
@@ -235,7 +244,7 @@ export default function ImageModal({
         return
       }
 
-      if (dir === 'h') {
+      if (dir === 'h' && !isMobileRef.current) {
         const vx = Math.abs(dx / dt) * 1000
         if (Math.abs(dx) > 35 || vx > 350) {
           if (dx < 0) goNextRef.current()
@@ -277,7 +286,7 @@ export default function ImageModal({
             className="fixed inset-0 z-[55] flex items-center justify-center pointer-events-none"
             style={{
               padding: isMobile
-                ? 'max(44px, env(safe-area-inset-top, 8px)) 0px max(64px, env(safe-area-inset-bottom, 8px))'
+                ? 'max(44px, env(safe-area-inset-top, 8px)) 0px max(148px, calc(env(safe-area-inset-bottom, 0px) + 140px))'
                 : 'max(60px, env(safe-area-inset-top, 16px)) 12px max(100px, env(safe-area-inset-bottom, 16px))'
             }}
             initial={{ opacity: isMobile ? 0 : 1 }}
@@ -293,7 +302,7 @@ export default function ImageModal({
               className="relative w-full max-w-5xl pointer-events-none"
               style={{
                 aspectRatio: '1 / 1',
-                maxHeight: isMobile ? 'calc(100dvh - 110px)' : 'calc(100dvh - 180px)',
+                maxHeight: isMobile ? 'calc(100dvh - 192px)' : 'calc(100dvh - 180px)',
                 y: dragY,
                 x: dragX,
                 ...(isMobile ? {} : { scale: desktopImageScale }),
@@ -412,19 +421,16 @@ export default function ImageModal({
               )}
             </div>
 
-            {/* ═══ NAVIGATION ARROWS ═══ */}
-            {/* Mobile: smaller, lower position for thumb reach */}
-            {/* Desktop: larger, vertically centered — yeezy.com style */}
+            {/* ═══ NAVIGATION ARROWS — Desktop only (sides) ═══ */}
             {hasPrev && (
               <button
                 onClick={goPrev}
-                className="absolute z-10 flex items-center justify-center active:opacity-40 transition-opacity duration-150
-                  top-[60%] -translate-y-1/2 left-1 w-11 h-11
-                  sm:top-1/2 sm:left-6 sm:w-14 sm:h-14
-                  text-black/30 sm:text-black/50 sm:hover:text-black"
+                className="hidden sm:flex absolute z-10 items-center justify-center active:opacity-40 transition-opacity duration-150
+                  top-1/2 -translate-y-1/2 left-6 w-14 h-14
+                  text-black/50 hover:text-black"
                 aria-label="Previous"
               >
-                <svg className="w-[18px] h-[18px] sm:w-7 sm:h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M15 18l-6-6 6-6" />
                 </svg>
               </button>
@@ -433,28 +439,68 @@ export default function ImageModal({
             {hasNext && (
               <button
                 onClick={goNext}
-                className="absolute z-10 flex items-center justify-center active:opacity-40 transition-opacity duration-150
-                  top-[60%] -translate-y-1/2 right-1 w-11 h-11
-                  sm:top-1/2 sm:right-6 sm:w-14 sm:h-14
-                  text-black/30 sm:text-black/50 sm:hover:text-black"
+                className="hidden sm:flex absolute z-10 items-center justify-center active:opacity-40 transition-opacity duration-150
+                  top-1/2 -translate-y-1/2 right-6 w-14 h-14
+                  text-black/50 hover:text-black"
                 aria-label="Next"
               >
-                <svg className="w-[18px] h-[18px] sm:w-7 sm:h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M9 18l6-6-6-6" />
                 </svg>
               </button>
             )}
 
-            {/* ═══ BOTTOM INFO ═══ */}
+            {/* ═══ BOTTOM AREA: Mobile nav buttons + info ═══ */}
             <div
-              className="absolute bottom-0 left-0 right-0 z-10 pointer-events-none"
+              className="absolute bottom-0 left-0 right-0 z-10"
               style={{
                 paddingBottom: isMobile
                   ? 'max(16px, env(safe-area-inset-bottom, 12px))'
                   : 'max(28px, env(safe-area-inset-bottom, 24px))',
               }}
             >
-              <div className="flex flex-col items-center gap-1 sm:gap-1.5 px-6 sm:px-4">
+              {/* Mobile-only nav buttons — centered below image */}
+              {images.length > 1 && (
+                <div className="flex sm:hidden justify-center items-center gap-6 mb-4">
+                  <button
+                    onClick={goPrev}
+                    disabled={!hasPrev}
+                    className="flex items-center justify-center w-12 h-12 rounded-full
+                      bg-white/75 backdrop-blur-md border border-black/[0.07] shadow-sm
+                      disabled:opacity-20 transition-all duration-200 ease-out
+                      active:scale-90 active:bg-black/5"
+                    aria-label="Previous"
+                  >
+                    <svg
+                      className="w-5 h-5 text-black/70"
+                      viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+                    >
+                      <path d="M15 18l-6-6 6-6" />
+                    </svg>
+                  </button>
+
+                  <button
+                    onClick={goNext}
+                    disabled={!hasNext}
+                    className="flex items-center justify-center w-12 h-12 rounded-full
+                      bg-white/75 backdrop-blur-md border border-black/[0.07] shadow-sm
+                      disabled:opacity-20 transition-all duration-200 ease-out
+                      active:scale-90 active:bg-black/5"
+                    aria-label="Next"
+                  >
+                    <svg
+                      className="w-5 h-5 text-black/70"
+                      viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+                    >
+                      <path d="M9 18l6-6-6-6" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+
+              <div className="flex flex-col items-center gap-1 sm:gap-1.5 px-6 sm:px-4 pointer-events-none">
                 {displayImage.caption && (
                   <p className="text-[13px] sm:text-[12px] font-normal text-black tracking-wide text-center max-w-sm sm:max-w-md leading-relaxed">
                     {displayImage.overlays?.icon?.data && (

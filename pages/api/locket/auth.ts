@@ -10,7 +10,7 @@
  */
 import type { NextApiRequest, NextApiResponse } from 'next'
 
-const FIREBASE_API_KEY = process.env.LOCKET_FIREBASE_API_KEY || 'AIzaSyDJtDjZNzNjLnAdPfA9O7FO5U1VJq2MsLk'
+const FIREBASE_API_KEY = process.env.LOCKET_FIREBASE_API_KEY || 'AIzaSyCQngaaXQIfJaH0aS2l7REgIjD7nL431So'
 const LOCKET_API_URL = process.env.LOCKET_CAMERA_API_URL || 'https://api.locketcamera.com'
 
 interface LocketAuthRequest {
@@ -36,11 +36,17 @@ interface LocketAuthResponse {
 
 async function signInWithFirebase(email: string, password: string) {
   const res = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`,
+    `https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyPassword?key=${FIREBASE_API_KEY}`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, returnSecureToken: true }),
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Client-Version': 'iOS/FirebaseSDK/10.23.1/FirebaseCore-iOS',
+        'X-Firebase-GMPID': '1:641029076083:ios:cc8eb46290d69b234fa606',
+        'X-Ios-Bundle-Identifier': 'com.locket.Locket',
+        'User-Agent': 'FirebaseAuth.iOS/10.23.1 com.locket.Locket/1.82.0 iPhone/18.0 hw/iPhone12_1',
+      },
+      body: JSON.stringify({ email, password, clientType: 'CLIENT_TYPE_IOS', returnSecureToken: true }),
     }
   )
   const data = await res.json()

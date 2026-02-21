@@ -25,15 +25,15 @@ function ImageCard({ image, layoutId, isSelected = false }: ImageCardProps) {
   // Format date: "21.02.2026 — 14:30"
   const formattedDate = image.created_at
     ? (() => {
-        const d = new Date(image.created_at)
-        if (isNaN(d.getTime())) return ''
-        const day = String(d.getDate()).padStart(2, '0')
-        const month = String(d.getMonth() + 1).padStart(2, '0')
-        const year = d.getFullYear()
-        const hours = String(d.getHours()).padStart(2, '0')
-        const mins = String(d.getMinutes()).padStart(2, '0')
-        return `${day}.${month}.${year} — ${hours}:${mins}`
-      })()
+      const d = new Date(image.created_at)
+      if (isNaN(d.getTime())) return ''
+      const day = String(d.getDate()).padStart(2, '0')
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const year = d.getFullYear()
+      const hours = String(d.getHours()).padStart(2, '0')
+      const mins = String(d.getMinutes()).padStart(2, '0')
+      return `${day}.${month}.${year} — ${hours}:${mins}`
+    })()
     : ''
 
   return (
@@ -96,7 +96,7 @@ function ImageCard({ image, layoutId, isSelected = false }: ImageCardProps) {
       {!isSelected && (
         <div className="pt-1.5 pb-2.5 sm:pt-2.5 sm:pb-4 text-center min-h-[28px] sm:min-h-[36px]">
           {image.caption && (
-            <p className="text-[10px] sm:text-[11px] font-medium text-black truncate leading-tight px-0.5">
+            <p className="text-[11px] sm:text-[11px] font-medium text-black truncate leading-tight px-0.5">
               {image.overlays?.icon?.data && (
                 <span className="mr-1">{image.overlays.icon.data}</span>
               )}

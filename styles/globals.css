@@ -116,3 +116,11 @@ button, a, [role="button"] {
 img {
   image-rendering: -webkit-optimize-contrast;
 }
+
+/* ── Mobile modal optimizations ── */
+@media (max-width: 639px) {
+  .fixed.inset-0 {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}

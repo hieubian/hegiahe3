@@ -50,7 +50,8 @@ export default function LocketAdmin() {
         localStorage.setItem('locket_user', JSON.stringify(result.user))
         router.push('/admin/locket/dashboard')
       } else {
-        setError(result.message || 'Đăng nhập thất bại')
+        const msg = result.message
+        setError(typeof msg === 'string' ? msg : (msg ? JSON.stringify(msg) : 'Đăng nhập thất bại'))
       }
     } catch (err) {
       setError('Lỗi kết nối. Vui lòng thử lại.')

@@ -104,7 +104,8 @@ async function authenticateWithLocket(data: LocketAuthRequest) {
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}))
-    throw new Error(errorData?.message || errorData?.error || `Login failed (${res.status})`)
+    const msg = errorData?.message || errorData?.error || errorData?.msg || `Login failed (${res.status})`
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg))
   }
 
   return await res.json()

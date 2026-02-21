@@ -103,10 +103,3 @@ export function deleteImage(id: number): boolean {
 
   return true
 }
-
-export function closeDB() {
-  if (db) {
-    db.close()
-    db = null
-  }
-}

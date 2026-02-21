@@ -8,100 +8,65 @@ import Navbar from '@/components/Navbar'
 import ImageCard from '@/components/ImageCard'
 import ImageModal from '@/components/ImageModal'
 
-/**
- * Moment data from Locket API
- */
-interface LocketMoment {
-  id: string
-  user: string
-  imageUrl: string
-  thumbnailUrl: string
-  videoUrl: string | null
-  caption: string | null
-  overlays: {
-    background?: { colors?: string[] }
-    textColor?: string
-    icon?: { type?: string; data?: string }
-  } | null
-  createTime: number
-  date: string
-}
-
-/**
- * Convert Locket moment → ImageData
- */
-function momentToImageData(m: LocketMoment): ImageData {
-  return {
-    id: m.id,
-    slug: m.id,
-    image_url: m.imageUrl || m.thumbnailUrl,
-    thumbnail_url: m.thumbnailUrl,
-    video_url: m.videoUrl || undefined,
-    title: m.caption || '',
-    caption: m.caption || undefined,
-    width: 1,
-    height: 1,
-    created_at: m.createTime
-      ? new Date(m.createTime * 1000).toISOString()
-      : new Date().toISOString(),
-    order_index: 0,
-    source: 'locket',
-    overlays: m.overlays,
-  }
-}
 
 /**
  * Home — yeezy.com extreme minimalism
  * 
  * Clean grid, Inter font, no clutter. Each image shows date below.
  * Click → full-screen modal with shared element transition.
+ * 
+ * Photos are loaded from the synced database (public).
+ * Admin syncs Locket moments via /admin/locket/dashboard.
  */
 export default function Home() {
   const router = useRouter()
   const [images, setImages] = useState<ImageData[]>([])
   const [selectedImage, setSelectedImage] = useState<ImageData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [isConnected, setIsConnected] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const lastViewedRef = useRef<string | null>(null)
   const IMAGES_PER_PAGE = 24
 
+  // Fetch synced images from public database API
   useEffect(() => {
-    const token = localStorage.getItem('locket_token')
-    const localId = localStorage.getItem('locket_local_id')
-
-    if (!token || !localId) {
-      setIsConnected(false)
-      setLoading(false)
-      return
-    }
-
-    setIsConnected(true)
-    fetchMoments(token, localId)
-  }, [])
-
-  const fetchMoments = async (token: string, localId: string) => {
-    try {
-      setLoading(true)
-      const res = await fetch('/api/locket/moments', {
-        headers: {
-          'x-locket-token': token,
-          'x-locket-uid': localId,
-        },
-      })
-      const result = await res.json()
-      if (res.ok && result.success) {
-        const sorted = (result.data || []).sort(
-          (a: LocketMoment, b: LocketMoment) => b.createTime - a.createTime
-        )
-        setImages(sorted.map(momentToImageData))
+    const fetchImages = async () => {
+      try {
+        setLoading(true)
+        const res = await fetch('/api/images')
+        if (res.ok) {
+          const data = await res.json()
+          const imgs: ImageData[] = (Array.isArray(data) ? data : data.images || [])
+            .map((img: any) => ({
+              id: String(img.id || img.slug || ''),
+              slug: img.slug || '',
+              image_url: img.image_url || img.thumbnail_url || '',
+              thumbnail_url: img.thumbnail_url || img.image_url || '',
+              video_url: img.video_url || undefined,
+              title: img.title || '',
+              caption: img.caption || img.title || '',
+              width: img.width || 1080,
+              height: img.height || 1080,
+              created_at: typeof img.created_at === 'number'
+                ? new Date(img.created_at).toISOString()
+                : img.created_at || new Date().toISOString(),
+              order_index: img.order_index || 0,
+              source: img.source || 'locket',
+              overlays: img.overlays || null,
+            }))
+            .filter((img: ImageData) => img.image_url)
+            .sort((a: ImageData, b: ImageData) =>
+              new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            )
+          setImages(imgs)
+        }
+      } catch (err) {
+        console.error('Failed to fetch images:', err)
+      } finally {
+        setLoading(false)
       }
-    } catch (err) {
-      console.error('Failed to fetch moments:', err)
-    } finally {
-      setLoading(false)
     }
-  }
+    fetchImages()
+  }, [])
 
   // Sync modal state with URL
   useEffect(() => {
@@ -195,18 +160,6 @@ export default function Home() {
                 </div>
               ))}
             </div>
-          ) : !isConnected ? (
-            <div className="flex flex-col items-center justify-center min-h-[70vh] text-center">
-              <p className="text-[10px] tracking-[0.4em] text-neutral-300 mb-10 uppercase">
-                no connection
-              </p>
-              <button
-                onClick={() => router.push('/admin')}
-                className="px-8 py-3 bg-black text-white text-[10px] tracking-[0.25em] uppercase hover:bg-neutral-800 transition-colors duration-300"
-              >
-                connect locket
-              </button>
-            </div>
           ) : images.length > 0 ? (
             <>
               {/* Grid — uniform columns, no masonry */}
@@ -237,7 +190,7 @@ export default function Home() {
                     aria-label="Previous page"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M15 18l-6-6 6-6"/>
+                      <path d="M15 18l-6-6 6-6" />
                     </svg>
                   </button>
 
@@ -267,7 +220,7 @@ export default function Home() {
                     aria-label="Next page"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M9 18l6-6-6-6"/>
+                      <path d="M9 18l6-6-6-6" />
                     </svg>
                   </button>
                 </div>

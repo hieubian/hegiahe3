@@ -92,8 +92,8 @@ async function authenticateWithLocket(data: LocketAuthRequest) {
     : `${LOCKET_AUTH_URL}/locket/loginWithPhoneV2`
 
   const body = data.loginMethod === 'email'
-    ? { email: data.email, password: data.password, captchaToken: data.captchaToken || '' }
-    : { phone: data.phone, password: data.password, captchaToken: data.captchaToken || '' }
+    ? { email: data.email, password: data.password, ...(data.captchaToken ? { captchaToken: data.captchaToken } : {}) }
+    : { phone: data.phone, password: data.password, ...(data.captchaToken ? { captchaToken: data.captchaToken } : {}) }
 
   const res = await fetch(endpoint, {
     method: 'POST',

@@ -28,11 +28,12 @@ function formatDateTime(dateStr?: string): string {
 
 /**
  * ImageModal — Apple-inspired fullscreen viewer
- * 
- * PC: yeezy.com extreme minimalism with shared element transitions.
- * Mobile: iOS Photos-grade experience — no zoom, fluid translation gestures,
- *         rubber-band horizontal swipe, drag-to-dismiss with opacity fade,
- *         44pt touch targets, premium typography.
+ *
+ * Architecture:
+ * - Single touch handler layer (overlay, z-50) — prevents conflicts
+ * - Native event listener with { passive: false } for proper preventDefault
+ * - touch-action: none on modal root — stops browser gesture interference
+ * - Body scroll fully locked on mobile via position:fixed trick
  */
 export default function ImageModal({
   image,
@@ -72,12 +73,24 @@ export default function ImageModal({
   }, [])
 
   // ── Derived motion ──
-  // Mobile: pure opacity fade on drag, NO scale
-  // Desktop: keep subtle scale for visual polish
   const backdropOpacity = useTransform(dragY, [-300, 0, 300], [0, 1, 0])
   const desktopImageScale = useTransform(dragY, [-300, 0, 300], [0.92, 1, 0.92])
 
-  // ── Preload adjacent images for instant navigation ──
+  // ── Refs for native event listener ──
+  const overlayRef = useRef<HTMLDivElement>(null)
+  const hasPrevRef = useRef(hasPrev)
+  const hasNextRef = useRef(hasNext)
+  const goPrevRef = useRef(goPrev)
+  const goNextRef = useRef(goNext)
+  const onCloseRef = useRef(onClose)
+
+  hasPrevRef.current = hasPrev
+  hasNextRef.current = hasNext
+  goPrevRef.current = goPrev
+  goNextRef.current = goNext
+  onCloseRef.current = onClose
+
+  // ── Preload adjacent images ──
   useEffect(() => {
     if (!isOpen || idx < 0) return
     const preload = (url: string) => { const img = new window.Image(); img.src = url }
@@ -91,106 +104,158 @@ export default function ImageModal({
     }
   }, [isOpen, idx, images])
 
-  // Lock body scroll
+  // ── Lock body scroll — position:fixed trick for iOS Safari ──
   useEffect(() => {
     if (!isOpen) return
-    const sw = window.innerWidth - document.documentElement.clientWidth
-    const prev = { ov: document.body.style.overflow, pr: document.body.style.paddingRight }
-    document.body.style.overflow = 'hidden'
-    document.body.style.paddingRight = `${sw}px`
+
+    const scrollY = window.scrollY
+    const body = document.body
+    const html = document.documentElement
+
+    // Desktop: simple overflow hidden
+    const sw = window.innerWidth - html.clientWidth
+    const prevStyles = {
+      overflow: body.style.overflow,
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+      paddingRight: body.style.paddingRight,
+    }
+
+    body.style.overflow = 'hidden'
+    body.style.paddingRight = `${sw}px`
+
+    // Mobile: position:fixed trick — the ONLY reliable way on iOS Safari
+    if (window.innerWidth < 640) {
+      body.style.position = 'fixed'
+      body.style.top = `-${scrollY}px`
+      body.style.left = '0'
+      body.style.right = '0'
+      body.style.width = '100%'
+    }
+
     return () => {
-      document.body.style.overflow = prev.ov
-      document.body.style.paddingRight = prev.pr
+      body.style.overflow = prevStyles.overflow
+      body.style.position = prevStyles.position
+      body.style.top = prevStyles.top
+      body.style.left = prevStyles.left
+      body.style.right = prevStyles.right
+      body.style.width = prevStyles.width
+      body.style.paddingRight = prevStyles.paddingRight
+      // Restore scroll position after position:fixed
+      if (window.innerWidth < 640) {
+        window.scrollTo(0, scrollY)
+      }
     }
   }, [isOpen])
 
-  // Keyboard — with throttle for rapid key repeat
+  // Keyboard
   useEffect(() => {
     if (!isOpen) return
     let lastNav = 0
     const NAV_COOLDOWN = 150
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { onClose(); return }
-
+      if (e.key === 'Escape') { onCloseRef.current(); return }
       const now = Date.now()
       if (now - lastNav < NAV_COOLDOWN) return
       lastNav = now
-
-      if (e.key === 'ArrowLeft') goPrev()
-      else if (e.key === 'ArrowRight') goNext()
+      if (e.key === 'ArrowLeft') goPrevRef.current()
+      else if (e.key === 'ArrowRight') goNextRef.current()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [isOpen, onClose, goPrev, goNext])
+  }, [isOpen])
 
-  // ── Touch gestures ──
-  const touchRef = useRef<{
-    x: number; y: number; t: number
-    direction: 'none' | 'h' | 'v'
-  } | null>(null)
+  // ── Native touch handler — { passive: false } for proper preventDefault ──
+  // This is the SINGLE touch handler for the entire modal.
+  // Using native addEventListener because React synthetic events can't reliably preventDefault.
+  useEffect(() => {
+    if (!isOpen) return
+    const el = overlayRef.current
+    if (!el) return
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    const touch = e.touches[0]
-    touchRef.current = { x: touch.clientX, y: touch.clientY, t: Date.now(), direction: 'none' }
-  }, [])
+    let touch: { x: number; y: number; t: number; dir: 'none' | 'h' | 'v' } | null = null
 
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!touchRef.current) return
-    const touch = e.touches[0]
-    const dx = touch.clientX - touchRef.current.x
-    const dy = touch.clientY - touchRef.current.y
-
-    // Lock direction after 8px movement
-    if (touchRef.current.direction === 'none' && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
-      touchRef.current.direction = Math.abs(dy) >= Math.abs(dx) ? 'v' : 'h'
+    const onTouchStart = (e: TouchEvent) => {
+      const t = e.touches[0]
+      touch = { x: t.clientX, y: t.clientY, t: Date.now(), dir: 'none' }
     }
 
-    // Vertical — translate only, backdrop fades (NO scale on mobile)
-    if (touchRef.current.direction === 'v') {
-      dragY.set(dy)
-    }
+    const onTouchMove = (e: TouchEvent) => {
+      if (!touch) return
+      const t = e.touches[0]
+      const dx = t.clientX - touch.x
+      const dy = t.clientY - touch.y
 
-    // Horizontal — rubber-band follow with edge resistance
-    if (touchRef.current.direction === 'h') {
-      const atEdge = (!hasPrev && dx > 0) || (!hasNext && dx < 0)
-      const resistance = atEdge ? 0.25 : 0.85
-      dragX.set(dx * resistance)
-    }
-  }, [dragY, dragX, hasPrev, hasNext])
-
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (!touchRef.current) return
-    const touch = e.changedTouches[0]
-    const dx = touch.clientX - touchRef.current.x
-    const dy = touch.clientY - touchRef.current.y
-    const dt = Math.max(Date.now() - touchRef.current.t, 1)
-    const dir = touchRef.current.direction
-    touchRef.current = null
-
-    if (dir === 'v') {
-      const vy = Math.abs(dy / dt) * 1000
-      if (Math.abs(dy) > 80 || vy > 600) {
-        // Dismiss — slide out in drag direction, fade backdrop
-        motionAnimate(dragY, dy > 0 ? 600 : -600, { duration: 0.25, ease: [0.32, 0.72, 0, 1] })
-        setTimeout(onClose, 180)
-      } else {
-        // Spring back
-        motionAnimate(dragY, 0, { type: 'spring', stiffness: 400, damping: 30 })
+      // Lock direction
+      if (touch.dir === 'none' && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+        touch.dir = Math.abs(dy) >= Math.abs(dx) ? 'v' : 'h'
       }
-      return
+
+      // CRITICAL: prevent browser scroll/pull-to-refresh
+      if (touch.dir !== 'none') {
+        e.preventDefault()
+      }
+
+      if (touch.dir === 'v') {
+        dragY.set(dy)
+      }
+
+      if (touch.dir === 'h') {
+        const atEdge = (!hasPrevRef.current && dx > 0) || (!hasNextRef.current && dx < 0)
+        dragX.set(dx * (atEdge ? 0.2 : 0.85))
+      }
     }
 
-    if (dir === 'h') {
-      const vx = Math.abs(dx / dt) * 1000
-      if (Math.abs(dx) > 40 || vx > 400) {
-        if (dx < 0) goNext()
-        else goPrev()
+    const onTouchEnd = (e: TouchEvent) => {
+      if (!touch) return
+      const t = e.changedTouches[0]
+      const dx = t.clientX - touch.x
+      const dy = t.clientY - touch.y
+      const dt = Math.max(Date.now() - touch.t, 1)
+      const dir = touch.dir
+      touch = null
+
+      if (dir === 'v') {
+        const vy = Math.abs(dy / dt) * 1000
+        if (Math.abs(dy) > 70 || vy > 500) {
+          // Dismiss
+          motionAnimate(dragY, dy > 0 ? 500 : -500, {
+            duration: 0.22,
+            ease: [0.32, 0.72, 0, 1],
+          })
+          setTimeout(() => onCloseRef.current(), 160)
+        } else {
+          // Spring back
+          motionAnimate(dragY, 0, { type: 'spring', stiffness: 300, damping: 28 })
+        }
+        return
       }
-      // Spring back horizontal
-      motionAnimate(dragX, 0, { type: 'spring', stiffness: 400, damping: 30 })
+
+      if (dir === 'h') {
+        const vx = Math.abs(dx / dt) * 1000
+        if (Math.abs(dx) > 35 || vx > 350) {
+          if (dx < 0) goNextRef.current()
+          else goPrevRef.current()
+        }
+        motionAnimate(dragX, 0, { type: 'spring', stiffness: 300, damping: 28 })
+      }
     }
-  }, [dragY, dragX, goNext, goPrev, onClose])
+
+    // { passive: false } is ESSENTIAL — allows preventDefault() to work
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', onTouchEnd, { passive: true })
+
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
+    }
+  }, [isOpen, dragY, dragX])
 
   const handleExitComplete = useCallback(() => {
     lastImageRef.current = null
@@ -200,8 +265,6 @@ export default function ImageModal({
 
   const dateTime = displayImage ? formatDateTime(displayImage.created_at) : ''
   const counter = idx >= 0 ? `${idx + 1} / ${images.length}` : ''
-
-  // ── Apple-style spring curves ──
   const appleEase = [0.25, 0.1, 0.25, 1] as const
 
   return (
@@ -217,30 +280,25 @@ export default function ImageModal({
                 ? 'max(44px, env(safe-area-inset-top, 8px)) 0px max(64px, env(safe-area-inset-bottom, 8px))'
                 : 'max(60px, env(safe-area-inset-top, 16px)) 12px max(100px, env(safe-area-inset-bottom, 16px))'
             }}
-            initial={{ opacity: 1 }}
+            initial={{ opacity: isMobile ? 0 : 1 }}
             animate={{ opacity: 1 }}
             exit={{
               opacity: 0,
-              // Desktop: subtle scale exit. Mobile: pure fade, no zoom
               ...(isMobile ? {} : { scale: 0.95 }),
               transition: { duration: 0.3, ease: appleEase }
             }}
           >
             <motion.div
               layoutId={isMobile ? undefined : `image-${image.id}`}
-              className="relative w-full max-w-5xl pointer-events-auto"
+              className="relative w-full max-w-5xl pointer-events-none"
               style={{
                 aspectRatio: '1 / 1',
                 maxHeight: isMobile ? 'calc(100dvh - 110px)' : 'calc(100dvh - 180px)',
                 y: dragY,
                 x: dragX,
-                // Mobile: NO scale transform — pure translation only
                 ...(isMobile ? {} : { scale: desktopImageScale }),
+                willChange: 'transform',
               }}
-              onClick={(e) => e.stopPropagation()}
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
               transition={{
                 layout: { duration: 0.4, ease: appleEase }
               }}
@@ -279,19 +337,18 @@ export default function ImageModal({
         )}
       </AnimatePresence>
 
-      {/* LAYER 2: Overlay — backdrop, controls, info */}
+      {/* LAYER 2: Overlay — backdrop, controls, ALL touch handling */}
       <AnimatePresence onExitComplete={handleExitComplete}>
         {isOpen && displayImage && (
           <motion.div
+            ref={overlayRef}
             key="modal-overlay"
             className="fixed inset-0 z-50"
+            style={{ touchAction: 'none' }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3, ease: appleEase }}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
           >
             {/* White backdrop — fades with vertical drag */}
             <motion.div
@@ -308,7 +365,6 @@ export default function ImageModal({
                 height: isMobile ? '44px' : '64px',
               }}
             >
-              {/* Close button — 44pt Apple HIG minimum */}
               <button
                 onClick={onClose}
                 className="flex items-center justify-center text-black/80 active:opacity-40 transition-opacity duration-150"
@@ -320,7 +376,6 @@ export default function ImageModal({
                 </svg>
               </button>
 
-              {/* Counter — desktop: text, mobile: dot indicators */}
               {counter && (
                 <span className="hidden sm:inline text-[10px] tracking-[0.2em] text-neutral-400 font-light tabular-nums">
                   {counter}
@@ -392,7 +447,6 @@ export default function ImageModal({
               }}
             >
               <div className="flex flex-col items-center gap-1 sm:gap-1.5 px-6 sm:px-4">
-                {/* Caption */}
                 {displayImage.caption && (
                   <p className="text-[13px] sm:text-[12px] font-normal text-black tracking-wide text-center max-w-sm sm:max-w-md leading-relaxed">
                     {displayImage.overlays?.icon?.data && (
@@ -402,14 +456,12 @@ export default function ImageModal({
                   </p>
                 )}
 
-                {/* Date & time */}
                 {dateTime && (
                   <p className="text-[10px] sm:text-[10px] text-neutral-400 tracking-[0.15em] font-light tabular-nums">
                     {dateTime}
                   </p>
                 )}
 
-                {/* Source tag */}
                 {displayImage.source === 'locket' && (
                   <p className="text-[8px] sm:text-[9px] tracking-[0.2em] text-neutral-300 uppercase font-medium mt-0.5 sm:mt-1">
                     synced from locket

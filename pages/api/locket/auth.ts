@@ -10,7 +10,7 @@
  */
 import type { NextApiRequest, NextApiResponse } from 'next'
 
-const FIREBASE_API_KEY = process.env.LOCKET_FIREBASE_API_KEY || 'AIzaSyCQngaaXQIfJaH0aS2l7REgIjD7nL431So'
+const FIREBASE_API_KEY = process.env.LOCKET_FIREBASE_API_KEY || 'AIzaSyCQngaaXQIfJaH0aS217REgIjD7nL431So'
 const LOCKET_API_URL = process.env.LOCKET_CAMERA_API_URL || 'https://api.locketcamera.com'
 
 interface LocketAuthRequest {

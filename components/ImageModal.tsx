@@ -286,7 +286,7 @@ export default function ImageModal({
             className="fixed inset-0 z-[55] flex items-center justify-center pointer-events-none"
             style={{
               padding: isMobile
-                ? 'max(44px, env(safe-area-inset-top, 8px)) 0px max(148px, calc(env(safe-area-inset-bottom, 0px) + 140px))'
+                ? 'max(44px, env(safe-area-inset-top, 8px)) 0px max(96px, calc(env(safe-area-inset-bottom, 0px) + 88px))'
                 : 'max(60px, env(safe-area-inset-top, 16px)) 12px max(100px, env(safe-area-inset-bottom, 16px))'
             }}
             initial={{ opacity: isMobile ? 0 : 1 }}
@@ -302,7 +302,7 @@ export default function ImageModal({
               className="relative w-full max-w-5xl pointer-events-none"
               style={{
                 aspectRatio: '1 / 1',
-                maxHeight: isMobile ? 'calc(100dvh - 192px)' : 'calc(100dvh - 180px)',
+                maxHeight: isMobile ? 'calc(100dvh - 148px)' : 'calc(100dvh - 180px)',
                 y: dragY,
                 x: dragX,
                 ...(isMobile ? {} : { scale: desktopImageScale }),
@@ -450,7 +450,50 @@ export default function ImageModal({
               </button>
             )}
 
-            {/* ═══ BOTTOM AREA: Mobile nav buttons + info ═══ */}
+            {/* ═══ MOBILE NAV BUTTONS — bottom-left / bottom-right thumb zone ═══ */}
+            {images.length > 1 && (
+              <>
+                <button
+                  onClick={goPrev}
+                  disabled={!hasPrev}
+                  className="sm:hidden absolute z-20 flex items-center justify-center
+                    w-14 h-14 rounded-full
+                    bg-white/70 backdrop-blur-md border border-black/[0.07] shadow-md
+                    disabled:opacity-15 transition-all duration-200 ease-out
+                    active:scale-90 active:bg-black/8"
+                  style={{
+                    bottom: 'max(28px, calc(env(safe-area-inset-bottom, 0px) + 20px))',
+                    left: '24px',
+                  }}
+                  aria-label="Previous"
+                >
+                  <svg className="w-5 h-5 text-black/65" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M15 18l-6-6 6-6" />
+                  </svg>
+                </button>
+
+                <button
+                  onClick={goNext}
+                  disabled={!hasNext}
+                  className="sm:hidden absolute z-20 flex items-center justify-center
+                    w-14 h-14 rounded-full
+                    bg-white/70 backdrop-blur-md border border-black/[0.07] shadow-md
+                    disabled:opacity-15 transition-all duration-200 ease-out
+                    active:scale-90 active:bg-black/8"
+                  style={{
+                    bottom: 'max(28px, calc(env(safe-area-inset-bottom, 0px) + 20px))',
+                    right: '24px',
+                  }}
+                  aria-label="Next"
+                >
+                  <svg className="w-5 h-5 text-black/65" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </button>
+              </>
+            )}
+
+            {/* ═══ BOTTOM AREA: info ═══ */}
             <div
               className="absolute bottom-0 left-0 right-0 z-10"
               style={{
@@ -459,48 +502,7 @@ export default function ImageModal({
                   : 'max(28px, env(safe-area-inset-bottom, 24px))',
               }}
             >
-              {/* Mobile-only nav buttons — centered below image */}
-              {images.length > 1 && (
-                <div className="flex sm:hidden justify-center items-center gap-6 mb-4">
-                  <button
-                    onClick={goPrev}
-                    disabled={!hasPrev}
-                    className="flex items-center justify-center w-12 h-12 rounded-full
-                      bg-white/75 backdrop-blur-md border border-black/[0.07] shadow-sm
-                      disabled:opacity-20 transition-all duration-200 ease-out
-                      active:scale-90 active:bg-black/5"
-                    aria-label="Previous"
-                  >
-                    <svg
-                      className="w-5 h-5 text-black/70"
-                      viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                      strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
-                    >
-                      <path d="M15 18l-6-6 6-6" />
-                    </svg>
-                  </button>
-
-                  <button
-                    onClick={goNext}
-                    disabled={!hasNext}
-                    className="flex items-center justify-center w-12 h-12 rounded-full
-                      bg-white/75 backdrop-blur-md border border-black/[0.07] shadow-sm
-                      disabled:opacity-20 transition-all duration-200 ease-out
-                      active:scale-90 active:bg-black/5"
-                    aria-label="Next"
-                  >
-                    <svg
-                      className="w-5 h-5 text-black/70"
-                      viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                      strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
-                    >
-                      <path d="M9 18l6-6-6-6" />
-                    </svg>
-                  </button>
-                </div>
-              )}
-
-              <div className="flex flex-col items-center gap-1 sm:gap-1.5 px-6 sm:px-4 pointer-events-none">
+              <div className="flex flex-col items-center gap-1 sm:gap-1.5 px-20 sm:px-4 pointer-events-none">
                 {displayImage.caption && (
                   <p className="text-[13px] sm:text-[12px] font-normal text-black tracking-wide text-center max-w-sm sm:max-w-md leading-relaxed">
                     {displayImage.overlays?.icon?.data && (

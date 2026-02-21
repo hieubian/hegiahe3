@@ -1,50 +1,35 @@
 /**
- * Locket Moments API — Fetch personal photos from Locket
+ * Locket Moments API — Fetch personal photos directly from Locket
  * 
- * Strategy for HIGH-QUALITY images:
- * 1. Call getMomentV2 via api.locket-dio.com (returns thumbnailUrl + possibly more)
- * 2. Also call getLatestMomentV2 via Locket's Firebase callable (returns full Firestore data with image_url)
- * 3. Merge results: use image_url (full-res) for display, thumbnailUrl for grid thumbnails
- *
- * API format reference: Client-Locket-Dio-main/src/services/LocketDioServices/ActionMoments.js
+ * Uses ONLY the official Locket Firebase callable API (api.locketcamera.com).
+ * No third-party proxy (Locket Dio removed).
+ * 
+ * Reference: locket-main/api.py → getLastMoment()
  */
 import type { NextApiRequest, NextApiResponse } from 'next'
 
-const LOCKET_API_URL = process.env.LOCKET_API_URL || 'https://api.locket-dio.com'
-const LOCKET_API_KEY = process.env.LOCKET_API_KEY || 'LKD-LOCKETDIO-AB02F55KYM55DD02MM03YY25-LKD'
-const LOCKET_FIREBASE_URL = 'https://api.locketcamera.com'
+const LOCKET_API_URL = process.env.LOCKET_CAMERA_API_URL || 'https://api.locketcamera.com'
 
-// Shared headers for server-side requests to Locket Dio
+// Firebase callable headers — matches Locket iOS app exactly
 const LOCKET_HEADERS: Record<string, string> = {
   'Content-Type': 'application/json',
-  'x-api-key': LOCKET_API_KEY,
-  'x-app-author': 'dio',
-  'x-app-name': 'locketdio',
-  'x-app-client': 'Beta2.5.5.2.4',
-  'x-app-api': 'v2.2.1',
-  'x-app-env': 'production',
-  'Origin': 'https://locket-dio.com',
-  'Referer': 'https://locket-dio.com/',
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-}
-
-// Firebase callable headers (same as Locket iOS app)
-const FIREBASE_HEADERS: Record<string, string> = {
-  'Content-Type': 'application/json',
-  'Accept-Language': 'en-US',
-  'X-Ios-Bundle-Identifier': 'com.locket.Locket',
+  'Accept': '*/*',
+  'Accept-Language': 'en-GB,en;q=0.9',
+  'Connection': 'keep-alive',
   'X-Client-Version': 'iOS/FirebaseSDK/10.23.1/FirebaseCore-iOS',
   'X-Firebase-GMPID': '1:641029076083:ios:cc8eb46290d69b234fa606',
+  'X-Ios-Bundle-Identifier': 'com.locket.Locket',
+  'User-Agent': 'Locket/1 CFNetwork/1474 Darwin/23.0.0',
 }
 
 /**
- * Moment interface — enriched with both full-res and thumbnail URLs
+ * Moment interface
  */
 interface LocketMoment {
   id: string
   user: string
-  imageUrl: string       // Full-resolution image (prefer this for display)
-  thumbnailUrl: string   // Compressed thumbnail (for grid/loading)
+  imageUrl: string
+  thumbnailUrl: string
   videoUrl: string | null
   caption: string | null
   overlays: any | null
@@ -60,133 +45,94 @@ interface MomentsResponse {
 }
 
 /**
- * Fetch moments via Locket Dio API (getMomentV2)
- * Returns moments with thumbnailUrl
+ * Fetch moments directly from Locket's Firebase callable API (getLatestMomentV2)
+ * This is the official endpoint — same as Locket iOS app uses.
  */
-async function fetchViaDioApi(
+async function fetchLocketMoments(
   idToken: string,
-  localId: string,
-  options: { timestamp?: number | null; limit?: number } = {}
-): Promise<any[]> {
-  const { timestamp = null, limit = 60 } = options
-
-  const res = await fetch(`${LOCKET_API_URL}/locket/getMomentV2`, {
+  _localId: string,
+): Promise<LocketMoment[]> {
+  const res = await fetch(`${LOCKET_API_URL}/getLatestMomentV2`, {
     method: 'POST',
     headers: {
       ...LOCKET_HEADERS,
       'Authorization': `Bearer ${idToken}`,
     },
-    body: JSON.stringify({ timestamp, friendId: localId, limit }),
+    body: JSON.stringify({
+      data: {
+        excluded_users: [],
+        fetch_streak: false,
+        should_count_missed_moments: true,
+      },
+    }),
   })
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err?.error?.message || err?.message || `Failed to fetch moments (${res.status})`)
+    throw new Error(err?.error?.message || err?.message || `Locket API error (${res.status})`)
   }
 
   const result = await res.json()
-  return result?.data || []
-}
 
-/**
- * Fetch moments directly from Locket Firebase callable (getLatestMomentV2)
- * This returns Firestore data which includes image_url (full-res) separately
- */
-async function fetchViaFirebase(idToken: string): Promise<Record<string, any>> {
-  try {
-    const res = await fetch(`${LOCKET_FIREBASE_URL}/getLatestMomentV2`, {
-      method: 'POST',
-      headers: {
-        ...FIREBASE_HEADERS,
-        'Authorization': `Bearer ${idToken}`,
-      },
-      body: JSON.stringify({
-        data: {
-          excluded_users: [],
-          fetch_streak: false,
-          should_count_missed_moments: false,
-        },
-      }),
-    })
+  // getLatestMomentV2 returns different structures — handle all:
+  // { result: { data: {...moments} } } or { result: {...moments} }
+  const data = result?.result?.data || result?.result || result?.data
 
-    if (!res.ok) return {}
-
-    const result = await res.json()
-    const data = result?.result?.data || result?.result || result?.data
-
-    // Build a map of momentId → { image_url, thumbnail_url, video_url, ... }
-    const momentMap: Record<string, any> = {}
-
-    if (data && typeof data === 'object') {
-      // getLatestMomentV2 may return different structures
-      // Could be: { moments: [...] } or { data: [...] } or array directly
-      const moments = Array.isArray(data) ? data 
-        : (data.moments || data.data || Object.values(data))
-
-      if (Array.isArray(moments)) {
-        for (const m of moments) {
-          const id = m?.canonical_uid || m?.id || m?.moment_uid
-          if (id) {
-            momentMap[id] = {
-              image_url: m.image_url || m.photo_url || m.imageUrl || m.photoUrl || null,
-              thumbnail_url: m.thumbnail_url || m.thumbnailUrl || null,
-              video_url: m.video_url || m.videoUrl || null,
-            }
-          }
-        }
-      }
-    }
-
-    return momentMap
-  } catch (err) {
-    console.log('Firebase callable fallback failed (non-critical):', (err as any)?.message)
-    return {}
+  if (!data || typeof data !== 'object') {
+    return []
   }
-}
 
-/**
- * Merge Dio API response with Firebase callable data 
- * Prioritize: Firebase image_url (full-res) > Dio imageUrl > Dio thumbnailUrl
- */
-function mergeMoments(dioMoments: any[], firebaseMap: Record<string, any>, localId: string): LocketMoment[] {
-  return dioMoments.map((m: any) => {
-    const id = m.id || ''
-    const fb = firebaseMap[id] || {}
+  // Data could be: array, or object keyed by moment ID
+  const momentEntries: any[] = Array.isArray(data)
+    ? data
+    : Object.values(data).filter((v: any) => v && typeof v === 'object' && (v.canonical_uid || v.id || v.moment_uid))
 
-    // All possible image URL fields from both sources
-    const thumbnailUrl = m.thumbnailUrl || m.thumbnail_url || fb.thumbnail_url || ''
-    const fullResUrl = m.imageUrl || m.image_url || m.photo_url || fb.image_url || ''
-    const videoUrl = m.videoUrl || m.video_url || fb.video_url || null
+  return momentEntries
+    .map((m: any) => {
+      const id = m.canonical_uid || m.id || m.moment_uid || ''
+      if (!id) return null
 
-    return {
-      id,
-      user: m.user || localId,
-      imageUrl: fullResUrl || thumbnailUrl,    // Best quality available
-      thumbnailUrl: thumbnailUrl || fullResUrl, // Thumbnail fallback
-      videoUrl,
-      caption: m.caption || null,
-      overlays: m.overlays || null,
-      createTime: m.createTime || 0,
-      date: m.date || '',
-    }
-  })
-}
+      const thumbnailUrl = m.thumbnail_url || m.thumbnailUrl || ''
+      const fullResUrl = m.image_url || m.photo_url || m.imageUrl || m.photoUrl || ''
+      const videoUrl = m.video_url || m.videoUrl || null
+      const caption = m.caption || null
+      const overlays = m.overlays || null
 
-/**
- * Main fetch: combines both API sources for best quality images
- */
-async function fetchLocketMoments(
-  idToken: string,
-  localId: string,
-  options: { timestamp?: number | null; limit?: number } = {}
-): Promise<LocketMoment[]> {
-  // Fetch from both sources in parallel
-  const [dioMoments, firebaseMap] = await Promise.all([
-    fetchViaDioApi(idToken, localId, options),
-    fetchViaFirebase(idToken),
-  ])
+      // Parse creation time — could be timestamp (seconds), ISO string, or Firestore Timestamp
+      let createTime = 0
+      if (m.created_at) {
+        if (typeof m.created_at === 'number') {
+          createTime = m.created_at
+        } else if (typeof m.created_at === 'object' && m.created_at._seconds) {
+          createTime = m.created_at._seconds
+        } else if (typeof m.created_at === 'string') {
+          createTime = Math.floor(new Date(m.created_at).getTime() / 1000)
+        }
+      } else if (m.createTime) {
+        createTime = typeof m.createTime === 'number' ? m.createTime : 0
+      } else if (m.date) {
+        createTime = Math.floor(new Date(m.date).getTime() / 1000)
+      }
 
-  return mergeMoments(dioMoments, firebaseMap, localId)
+      // Format date string
+      const dateStr = createTime
+        ? new Date(createTime * 1000).toISOString()
+        : ''
+
+      return {
+        id,
+        user: m.user || m.sender_uid || _localId,
+        imageUrl: fullResUrl || thumbnailUrl,
+        thumbnailUrl: thumbnailUrl || fullResUrl,
+        videoUrl,
+        caption,
+        overlays,
+        createTime,
+        date: dateStr,
+      }
+    })
+    .filter((m): m is LocketMoment => m !== null && !!(m.imageUrl || m.thumbnailUrl))
+    .sort((a, b) => b.createTime - a.createTime)
 }
 
 export default async function handler(
@@ -208,11 +154,7 @@ export default async function handler(
       })
     }
 
-    const timestampStr = req.query.timestamp as string
-    const timestamp = timestampStr ? parseInt(timestampStr) || null : null
-    const limit = parseInt(req.query.limit as string) || 60
-
-    const moments = await fetchLocketMoments(idToken, localId, { timestamp, limit })
+    const moments = await fetchLocketMoments(idToken, localId)
 
     return res.status(200).json({
       success: true,

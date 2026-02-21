@@ -27,12 +27,12 @@ function formatDateTime(dateStr?: string): string {
 }
 
 /**
- * ImageModal — yeezy.com extreme minimalism
+ * ImageModal — Apple-inspired fullscreen viewer
  * 
- * Full-screen white backdrop. Image centered.
- * Below the image: caption, full date/time, source tag.
- * Navigation arrows on desktop, swipe on mobile. Keyboard: Esc, ←, →.
- * Shared element transition via layoutId.
+ * PC: yeezy.com extreme minimalism with shared element transitions.
+ * Mobile: iOS Photos-grade experience — no zoom, fluid translation gestures,
+ *         rubber-band horizontal swipe, drag-to-dismiss with opacity fade,
+ *         44pt touch targets, premium typography.
  */
 export default function ImageModal({
   image,
@@ -58,11 +58,9 @@ export default function ImageModal({
     if (hasNext && onNavigate) onNavigate(images[idx + 1])
   }, [hasNext, onNavigate, images, idx])
 
-  // ── Drag-to-dismiss motion values ──
+  // ── Motion values ──
   const dragY = useMotionValue(0)
   const dragX = useMotionValue(0)
-  const backdropOpacity = useTransform(dragY, [-300, 0, 300], [0.15, 1, 0.15])
-  const imageScale = useTransform(dragY, [-300, 0, 300], [0.88, 1, 0.88])
 
   // ── Detect mobile ──
   const [isMobile, setIsMobile] = useState(false)
@@ -72,6 +70,12 @@ export default function ImageModal({
     window.addEventListener('resize', check, { passive: true })
     return () => window.removeEventListener('resize', check)
   }, [])
+
+  // ── Derived motion ──
+  // Mobile: pure opacity fade on drag, NO scale
+  // Desktop: keep subtle scale for visual polish
+  const backdropOpacity = useTransform(dragY, [-300, 0, 300], [0, 1, 0])
+  const desktopImageScale = useTransform(dragY, [-300, 0, 300], [0.92, 1, 0.92])
 
   // ── Preload adjacent images for instant navigation ──
   useEffect(() => {
@@ -104,7 +108,7 @@ export default function ImageModal({
   useEffect(() => {
     if (!isOpen) return
     let lastNav = 0
-    const NAV_COOLDOWN = 150 // ms — prevents skipping when holding arrow keys
+    const NAV_COOLDOWN = 150
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { onClose(); return }
@@ -120,7 +124,7 @@ export default function ImageModal({
     return () => window.removeEventListener('keydown', onKey)
   }, [isOpen, onClose, goPrev, goNext])
 
-  // ── Touch gestures: continuous vertical drag-to-dismiss + horizontal nav ──
+  // ── Touch gestures ──
   const touchRef = useRef<{
     x: number; y: number; t: number
     direction: 'none' | 'h' | 'v'
@@ -142,15 +146,15 @@ export default function ImageModal({
       touchRef.current.direction = Math.abs(dy) >= Math.abs(dx) ? 'v' : 'h'
     }
 
-    // Vertical — real-time drag feedback (backdrop fades, image scales)
+    // Vertical — translate only, backdrop fades (NO scale on mobile)
     if (touchRef.current.direction === 'v') {
       dragY.set(dy)
     }
 
-    // Horizontal — real-time rubber-band drag feedback
+    // Horizontal — rubber-band follow with edge resistance
     if (touchRef.current.direction === 'h') {
-      // Apply resistance at edges (no prev/no next)
-      const resistance = (!hasPrev && dx > 0) || (!hasNext && dx < 0) ? 0.3 : 0.8
+      const atEdge = (!hasPrev && dx > 0) || (!hasNext && dx < 0)
+      const resistance = atEdge ? 0.25 : 0.85
       dragX.set(dx * resistance)
     }
   }, [dragY, dragX, hasPrev, hasNext])
@@ -167,25 +171,24 @@ export default function ImageModal({
     if (dir === 'v') {
       const vy = Math.abs(dy / dt) * 1000
       if (Math.abs(dy) > 80 || vy > 600) {
-        // Fling dismiss — animate out in drag direction
-        motionAnimate(dragY, dy > 0 ? 800 : -800, { duration: 0.2, ease: 'easeOut' })
-        setTimeout(onClose, 150)
+        // Dismiss — slide out in drag direction, fade backdrop
+        motionAnimate(dragY, dy > 0 ? 600 : -600, { duration: 0.25, ease: [0.32, 0.72, 0, 1] })
+        setTimeout(onClose, 180)
       } else {
-        // Spring back — natural physics feel
-        motionAnimate(dragY, 0, { type: 'spring', stiffness: 500, damping: 35 })
+        // Spring back
+        motionAnimate(dragY, 0, { type: 'spring', stiffness: 400, damping: 30 })
       }
       return
     }
 
     if (dir === 'h') {
       const vx = Math.abs(dx / dt) * 1000
-      // Lower threshold + velocity-based for responsive feel
       if (Math.abs(dx) > 40 || vx > 400) {
         if (dx < 0) goNext()
         else goPrev()
       }
-      // Spring back horizontal position
-      motionAnimate(dragX, 0, { type: 'spring', stiffness: 500, damping: 35 })
+      // Spring back horizontal
+      motionAnimate(dragX, 0, { type: 'spring', stiffness: 400, damping: 30 })
     }
   }, [dragY, dragX, goNext, goPrev, onClose])
 
@@ -198,6 +201,9 @@ export default function ImageModal({
   const dateTime = displayImage ? formatDateTime(displayImage.created_at) : ''
   const counter = idx >= 0 ? `${idx + 1} / ${images.length}` : ''
 
+  // ── Apple-style spring curves ──
+  const appleEase = [0.25, 0.1, 0.25, 1] as const
+
   return (
     <>
       {/* LAYER 1: Shared element image */}
@@ -206,30 +212,37 @@ export default function ImageModal({
           <motion.div
             key={`modal-media-${image.id}`}
             className="fixed inset-0 z-[55] flex items-center justify-center pointer-events-none"
-            style={{ padding: isMobile
-              ? 'max(48px, env(safe-area-inset-top, 12px)) 4px max(70px, env(safe-area-inset-bottom, 12px))'
-              : 'max(60px, env(safe-area-inset-top, 16px)) 12px max(100px, env(safe-area-inset-bottom, 16px))'
+            style={{
+              padding: isMobile
+                ? 'max(44px, env(safe-area-inset-top, 8px)) 0px max(64px, env(safe-area-inset-bottom, 8px))'
+                : 'max(60px, env(safe-area-inset-top, 16px)) 12px max(100px, env(safe-area-inset-bottom, 16px))'
             }}
             initial={{ opacity: 1 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.25, ease: [0.25, 0.1, 0.25, 1] } }}
+            exit={{
+              opacity: 0,
+              // Desktop: subtle scale exit. Mobile: pure fade, no zoom
+              ...(isMobile ? {} : { scale: 0.95 }),
+              transition: { duration: 0.3, ease: appleEase }
+            }}
           >
             <motion.div
               layoutId={`image-${image.id}`}
               className="relative w-full max-w-5xl pointer-events-auto"
               style={{
                 aspectRatio: '1 / 1',
-                maxHeight: isMobile ? 'calc(100dvh - 130px)' : 'calc(100dvh - 180px)',
+                maxHeight: isMobile ? 'calc(100dvh - 110px)' : 'calc(100dvh - 180px)',
                 y: dragY,
                 x: dragX,
-                scale: imageScale,
+                // Mobile: NO scale transform — pure translation only
+                ...(isMobile ? {} : { scale: desktopImageScale }),
               }}
               onClick={(e) => e.stopPropagation()}
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
               transition={{
-                layout: { duration: 0.35, ease: [0.25, 0.1, 0.25, 1] }
+                layout: { duration: 0.4, ease: appleEase }
               }}
             >
               {image.video_url ? (
@@ -275,74 +288,84 @@ export default function ImageModal({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
+            transition={{ duration: 0.3, ease: appleEase }}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           >
-            {/* White backdrop — fades with drag-to-dismiss */}
-            <motion.div className="absolute inset-0 bg-white" style={{ opacity: backdropOpacity }} onClick={onClose} />
+            {/* White backdrop — fades with vertical drag */}
+            <motion.div
+              className="absolute inset-0 bg-white"
+              style={{ opacity: backdropOpacity }}
+              onClick={onClose}
+            />
 
-            {/* Top bar — close + counter */}
+            {/* ═══ TOP BAR ═══ */}
             <div
-              className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-3 sm:px-5 h-12 sm:h-16"
-              style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+              className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-2 sm:px-5"
+              style={{
+                paddingTop: 'env(safe-area-inset-top, 0px)',
+                height: isMobile ? '44px' : '64px',
+              }}
             >
+              {/* Close button — 44pt Apple HIG minimum */}
               <button
                 onClick={onClose}
-                className="text-black hover:opacity-50 active:scale-90 active:opacity-40 transition-all duration-150 p-3 -ml-2 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                className="flex items-center justify-center text-black/80 active:opacity-40 transition-opacity duration-150"
+                style={{ minWidth: 44, minHeight: 44 }}
                 aria-label="Close"
               >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sm:w-7 sm:h-7">
-                  <path d="M18 6L6 18M6 6l12 12"/>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="sm:w-7 sm:h-7">
+                  <path d="M18 6L6 18M6 6l12 12" />
                 </svg>
               </button>
 
-              {/* Desktop: text counter */}
+              {/* Counter — desktop: text, mobile: dot indicators */}
               {counter && (
                 <span className="hidden sm:inline text-[10px] tracking-[0.2em] text-neutral-400 font-light tabular-nums">
                   {counter}
                 </span>
               )}
 
-              {/* Mobile: dot indicators */}
               {idx >= 0 && images.length > 1 && (
-                <div className="flex sm:hidden items-center gap-[5px]">
-                  {images.length <= 7 ? (
-                    // Show all dots when few images
+                <div className="flex sm:hidden items-center gap-[6px] pr-1">
+                  {images.length <= 9 ? (
                     images.map((_, i) => (
                       <div
                         key={i}
-                        className={`rounded-full transition-all duration-200 ${
-                          i === idx
-                            ? 'w-[6px] h-[6px] bg-black'
-                            : 'w-[4px] h-[4px] bg-neutral-300'
-                        }`}
+                        className="rounded-full transition-all duration-300 ease-out"
+                        style={{
+                          width: i === idx ? 6 : 5,
+                          height: i === idx ? 6 : 5,
+                          backgroundColor: i === idx ? '#000' : '#d4d4d4',
+                          opacity: i === idx ? 1 : 0.6,
+                        }}
                       />
                     ))
                   ) : (
-                    // Show window of dots around current index
                     <>
-                      {idx > 1 && <div className="w-[3px] h-[3px] rounded-full bg-neutral-200" />}
-                      {idx > 0 && <div className="w-[4px] h-[4px] rounded-full bg-neutral-300" />}
-                      <div className="w-[6px] h-[6px] rounded-full bg-black" />
-                      {idx < images.length - 1 && <div className="w-[4px] h-[4px] rounded-full bg-neutral-300" />}
-                      {idx < images.length - 2 && <div className="w-[3px] h-[3px] rounded-full bg-neutral-200" />}
+                      <span className="text-[10px] tracking-[0.15em] text-neutral-400 font-light tabular-nums">
+                        {idx + 1}
+                      </span>
+                      <span className="text-[8px] text-neutral-300 font-light">/</span>
+                      <span className="text-[10px] tracking-[0.15em] text-neutral-300 font-light tabular-nums">
+                        {images.length}
+                      </span>
                     </>
                   )}
                 </div>
               )}
             </div>
 
-            {/* Navigation arrows — hidden on mobile, visible on sm+ */}
+            {/* ═══ NAVIGATION ARROWS — desktop only ═══ */}
             {hasPrev && (
               <button
                 onClick={goPrev}
-                className="hidden sm:flex absolute top-1/2 -translate-y-1/2 left-4 sm:left-6 z-10 w-14 h-14 items-center justify-center text-black/60 hover:text-black active:scale-90 transition-all duration-150"
+                className="hidden sm:flex absolute top-1/2 -translate-y-1/2 left-4 sm:left-6 z-10 w-14 h-14 items-center justify-center text-black/50 hover:text-black transition-colors duration-200"
                 aria-label="Previous"
               >
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M15 18l-6-6 6-6"/>
+                  <path d="M15 18l-6-6 6-6" />
                 </svg>
               </button>
             )}
@@ -350,24 +373,28 @@ export default function ImageModal({
             {hasNext && (
               <button
                 onClick={goNext}
-                className="hidden sm:flex absolute top-1/2 -translate-y-1/2 right-4 sm:right-6 z-10 w-14 h-14 items-center justify-center text-black/60 hover:text-black active:scale-90 transition-all duration-150"
+                className="hidden sm:flex absolute top-1/2 -translate-y-1/2 right-4 sm:right-6 z-10 w-14 h-14 items-center justify-center text-black/50 hover:text-black transition-colors duration-200"
                 aria-label="Next"
               >
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 18l6-6-6-6"/>
+                  <path d="M9 18l6-6-6-6" />
                 </svg>
               </button>
             )}
 
-            {/* Bottom info — caption, datetime, source */}
+            {/* ═══ BOTTOM INFO ═══ */}
             <div
-              className="absolute bottom-0 left-0 right-0 z-10 pointer-events-none pb-5 sm:pb-8"
-              style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom, 20px))' }}
+              className="absolute bottom-0 left-0 right-0 z-10 pointer-events-none"
+              style={{
+                paddingBottom: isMobile
+                  ? 'max(16px, env(safe-area-inset-bottom, 12px))'
+                  : 'max(28px, env(safe-area-inset-bottom, 24px))',
+              }}
             >
-              <div className="flex flex-col items-center gap-1.5 sm:gap-1.5 px-5 sm:px-4">
+              <div className="flex flex-col items-center gap-1 sm:gap-1.5 px-6 sm:px-4">
                 {/* Caption */}
                 {displayImage.caption && (
-                  <p className="text-[13px] sm:text-[12px] font-normal text-black tracking-wide text-center max-w-md leading-snug">
+                  <p className="text-[13px] sm:text-[12px] font-normal text-black tracking-wide text-center max-w-sm sm:max-w-md leading-relaxed">
                     {displayImage.overlays?.icon?.data && (
                       <span className="mr-1.5">{displayImage.overlays.icon.data}</span>
                     )}
@@ -377,14 +404,14 @@ export default function ImageModal({
 
                 {/* Date & time */}
                 {dateTime && (
-                  <p className="text-[11px] sm:text-[10px] text-neutral-400 tracking-[0.15em] font-light tabular-nums">
+                  <p className="text-[10px] sm:text-[10px] text-neutral-400 tracking-[0.15em] font-light tabular-nums">
                     {dateTime}
                   </p>
                 )}
 
                 {/* Source tag */}
                 {displayImage.source === 'locket' && (
-                  <p className="text-[9px] sm:text-[9px] tracking-[0.2em] text-neutral-300 uppercase font-medium mt-0.5 sm:mt-1">
+                  <p className="text-[8px] sm:text-[9px] tracking-[0.2em] text-neutral-300 uppercase font-medium mt-0.5 sm:mt-1">
                     synced from locket
                   </p>
                 )}

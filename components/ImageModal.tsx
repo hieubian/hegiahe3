@@ -227,7 +227,7 @@ export default function ImageModal({
             }}
           >
             <motion.div
-              layoutId={`image-${image.id}`}
+              layoutId={isMobile ? undefined : `image-${image.id}`}
               className="relative w-full max-w-5xl pointer-events-auto"
               style={{
                 aspectRatio: '1 / 1',

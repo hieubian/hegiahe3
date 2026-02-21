@@ -31,6 +31,7 @@ export default function LocketDashboard() {
   const [error, setError] = useState('')
   const [user, setUser] = useState<any>(null)
   const [syncing, setSyncing] = useState(false)
+  const [resetting, setResetting] = useState(false)
   const [syncResult, setSyncResult] = useState<string>('')
   const [selectedMoment, setSelectedMoment] = useState<LocketMoment | null>(null)
 
@@ -48,7 +49,7 @@ export default function LocketDashboard() {
 
     if (!adminToken) { router.push('/admin'); return }
     if (!locketToken) { router.push('/admin/locket'); return }
-    if (locketUser) { try { setUser(JSON.parse(locketUser)) } catch {} }
+    if (locketUser) { try { setUser(JSON.parse(locketUser)) } catch { } }
 
     fetchLocketMoments()
   }, [router])
@@ -118,6 +119,38 @@ export default function LocketDashboard() {
     }
   }
 
+  const resetAndSync = async () => {
+    if (!confirm('Reset sẽ xoá toàn bộ dữ liệu cũ và đồng bộ lại từ Locket. Tiếp tục?')) return
+    try {
+      setResetting(true)
+      setSyncResult('')
+      const { token, localId } = getLocketCredentials()
+
+      const response = await fetch('/api/locket/reset', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-locket-token': token,
+          'x-locket-uid': localId,
+        },
+        body: JSON.stringify({ token, localId }),
+      })
+
+      const result = await response.json()
+
+      if (response.ok && result.success) {
+        setSyncResult(`✅ ${result.message}`)
+      } else {
+        setSyncResult(`❌ ${result.message || 'Reset thất bại'}`)
+      }
+    } catch (err) {
+      setSyncResult('❌ Lỗi khi reset')
+      console.error('Reset error:', err)
+    } finally {
+      setResetting(false)
+    }
+  }
+
   const logout = () => {
     localStorage.removeItem('locket_token')
     localStorage.removeItem('locket_refresh_token')
@@ -161,14 +194,24 @@ export default function LocketDashboard() {
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={syncToGallery}
-                disabled={syncing || moments.length === 0}
-                className={`px-4 py-2 text-xs font-medium tracking-wider transition-all ${
-                  syncing || moments.length === 0
+                disabled={syncing || resetting || moments.length === 0}
+                className={`px-4 py-2 text-xs font-medium tracking-wider transition-all ${syncing || resetting || moments.length === 0
                     ? 'bg-yeezy-clay/50 text-yeezy-sand cursor-not-allowed'
                     : 'bg-yeezy-black text-yeezy-sand hover:bg-yeezy-clay'
-                }`}
+                  }`}
               >
                 {syncing ? 'ĐANG ĐỒNG BỘ...' : `ĐỒNG BỘ ${moments.length} ẢNH`}
+              </button>
+
+              <button
+                onClick={resetAndSync}
+                disabled={resetting || syncing || moments.length === 0}
+                className={`px-4 py-2 text-xs font-medium tracking-wider transition-all ${resetting || syncing || moments.length === 0
+                    ? 'bg-orange-300/50 text-white cursor-not-allowed'
+                    : 'bg-orange-500 text-white hover:bg-orange-600'
+                  }`}
+              >
+                {resetting ? 'ĐANG RESET...' : 'RESET & ĐỒNG BỘ LẠI'}
               </button>
 
               <button
@@ -379,8 +422,8 @@ export default function LocketDashboard() {
                 <p className="text-xs text-white/50 mt-1">
                   {selectedMoment.date || (selectedMoment.createTime
                     ? new Date(selectedMoment.createTime * 1000).toLocaleDateString('vi-VN', {
-                        day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                      })
+                      day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                    })
                     : '')}
                 </p>
               </div>
